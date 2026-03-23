@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loot Box Experiment v23.0 (Formal with ID)</title>
+    <script src="./js/tailwindcss.js"></script>
+    <script src="./js/react.production.min.js"></script>
+    <script src="./js/react-dom.production.min.js"></script>
+    <script src="./js/babel.min.js"></script>
+
+    <style>
+        .silhouette-force { 
+            filter: brightness(0) contrast(200%) !important; 
+            -webkit-filter: brightness(0) contrast(200%) !important;
+            opacity: 1 !important;
+            mix-blend-mode: normal !important;
+        }
+        body { overflow: hidden; background-color: white; }
+        
+        @keyframes shake { 0% { transform: translate(1px, 1px) rotate(0deg); } 10% { transform: translate(-1px, -2px) rotate(-1deg); } 50% { transform: translate(-1px, 2px) rotate(-1deg); } 100% { transform: translate(1px, -2px) rotate(-1deg); } }
+        .animate-shake { animation: shake 0.5s infinite; }
+        @keyframes pop-out { 0% { transform: scale(0) translateY(50px); opacity: 0; } 60% { transform: scale(1.1) translateY(-10px); opacity: 1; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+        .animate-pop-out { animation: pop-out 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fade-in 0.5s ease-out; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Icon Component
+        const Play = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
+        const Download = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>;
+        const Coins = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="8" cy="8" r="6"></circle><path d="M18.09 10.37A6 6 0 1 1 10.34 18"></path><path d="M7 6h1v4"></path><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path><path d="M14 14h1v4"></path><path d="M6.38 18.78a10.96 10.96 0 0 1-3.6-2.52"></path></svg>;
+        const AlertCircle = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>;
+        const Sparkles = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></svg>;
+        const ArrowRight = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>;
+        const Maximize = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>;
+        const Loader2 = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>;
+        const Timer = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="10" y1="2" x2="14" y2="2"></line><line x1="12" y1="14" x2="15" y2="11"></line><circle cx="12" cy="14" r="8"></circle></svg>;
+        const FileText = ({size=24, className}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>;
+
+        const CONFIG = {
+            totalTrials: 50,
+            fixationDuration: 1000,
+            buyThreshold: 10,
+        };
+
+        // --- CADR POOL---
+         const CARD_POOL = [
+            { id: 1, name: "毛球", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/1.png" },
+            { id: 2, name: "小雪球", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/2.png" },
+            { id: 3, name: "小蘑", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/3.png" },
+            { id: 4, name: "小芽", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/4.png" },
+            { id: 5, name: "史莱姆", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/5.png" },
+            { id: 6, name: "小蝶", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/6.png" },
+            { id: 7, name: "小蚪", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/7.png" },
+            { id: 8, name: "小火花", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/8.png" },
+            { id: 9, name: "小煤球", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/9.png" },
+            { id: 10, name: "小水滴", rarity: "N", prob: 0.99, value: 50, color: "text-gray-600", border: "border-gray-400", bg: "bg-gray-200", imgSrc: "./Data/10.png" },
+            
+            { id: 11, name: "冰企鹅", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/11.png" },
+            { id: 12, name: "闪电鼠", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/12.png" },
+            { id: 13, name: "旋风小鸟", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/13.png" },
+            { id: 14, name: "钻地鼹鼠", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/14.png" },
+            { id: 15, name: "火尾小狐", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/15.png" },
+            { id: 16, name: "晶化石怪", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/16.png" },
+            { id: 17, name: "棉花糖精灵", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/17.png" },
+            { id: 18, name: "念力小猫", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/18.png" },
+            { id: 19, name: "泡泡海豹", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/19.png" },
+            { id: 20, name: "顽皮小鬼", rarity: "R", prob: 0.8, value: 50, color: "text-green-600", border: "border-green-500", bg: "bg-green-100", imgSrc: "./Data/20.png" },
+
+            { id: 21, name: "冰晶凤凰", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/21.png" },
+            { id: 22, name: "月光九尾狐", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/22.png" },
+            { id: 23, name: "森林守护鹿", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/23.png" },
+            { id: 24, name: "重装甲虫", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/24.png" },
+            { id: 25, name: "海龙王", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/25.png" },
+            { id: 26, name: "雷霆战狼", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/26.png" },
+            { id: 27, name: "烈焰狮王", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/27.png" },
+            { id: 28, name: "梦魇之影", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/28.png" },
+            { id: 29, name: "熔岩巨兽", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/29.png" },
+            { id: 30, name: "幼龙王", rarity: "SR", prob: 0.5, value: 50, color: "text-blue-600", border: "border-blue-500", bg: "bg-blue-100", imgSrc: "./Data/30.png" },
+
+            { id: 31, name: "冰霜巨兽", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/31.png" },
+            { id: 32, name: "要塞魔像", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/32.png" },
+            { id: 33, name: "树妖女王", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/33.png" },
+            { id: 34, name: "装甲克拉肯", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/34.png" },
+            { id: 35, name: "彩虹独角兽", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/35.png" },
+            { id: 36, name: "皇家格里芬", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/36.png" },
+            { id: 37, name: "雷兽麒麟", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/37.png" },
+            { id: 38, name: "灵魂收割者", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/38.png" },
+            { id: 39, name: "熔岩三头龙", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/39.png" },
+            { id: 40, name: "水晶装甲龙", rarity: "SSR", prob: 0.2, value: 50, color: "text-purple-600", border: "border-purple-500", bg: "bg-purple-100", imgSrc: "./Data/40.png" },
+
+            { id: 41, name: "混沌主宰", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/41.png" },
+            { id: 42, name: "生死双蛇神", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/42.png" },
+            { id: 43, name: "时间天使", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/43.png" },
+            { id: 44, name: "世界树泰坦", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/44.png" },
+            { id: 45, name: "奥术核心", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/45.png" },
+            { id: 46, name: "零度骨龙", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/46.png" },
+            { id: 47, name: "创世星龙", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/47.png" },
+            { id: 48, name: "风暴之主", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/48.png" },
+            { id: 49, name: "红莲魔曜", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/49.png" },
+            { id: 50, name: "深渊巨鲲", rarity: "UR", prob: 0.01, value: 50, color: "text-amber-600", border: "border-amber-500", bg: "bg-amber-100", imgSrc: "./Data/50.png" },
+        ];
+
+        const FIXED_SEQUENCE_INDICES = [
+            42, 1, 33, 22, 13, 3, 31, 19, 45, 29, 
+            16, 40, 5, 26, 44, 35, 14, 21, 9, 41, 
+            25, 48, 12, 36, 0, 18, 47, 20, 39, 8, 
+            32, 11, 49, 23, 7, 43, 28, 10, 37, 4, 
+            15, 38, 2, 46, 27, 6, 34, 17, 24, 30
+        ];
+
+        const CHEST_IMAGE_URL = "./Data/chest.png";
+
+        const LootBoxExperiment = () => {
+            const [phase, setPhase] = useState('START'); 
+            const [currentTrial, setCurrentTrial] = useState(0);
+            const [dataLog, setDataLog] = useState([]);
+            const [currentCard, setCurrentCard] = useState(CARD_POOL[0]);
+            const [confidenceScore, setConfidenceScore] = useState(50);
+            const [bidAmount, setBidAmount] = useState(0);
+            const [lastResult, setLastResult] = useState(null);
+            const [loadedCount, setLoadedCount] = useState(0);
+            const [consentAgreedTime, setConsentAgreedTime] = useState(null);
+            const [subjectID, setSubjectID] = useState("");
+
+            const timerRef = useRef(null);
+            const experimentStartTimeRef = useRef(0);
+            const phaseStartTimeRef = useRef(0);
+            const currentOnsetsRef = useRef({ fixation: 0, chest: 0, confidence: 0, bidding: 0, opening: null, result: null });
+            const tempConfidenceRTRef = useRef(0);
+
+            const playSound = (type) => { console.log(`Audio: ${type}`); };
+
+            const getBeijingTime = () => {
+                return new Date().toLocaleString('zh-CN', { 
+                    timeZone: 'Asia/Shanghai',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false 
+                });
+            };
+
+            const startPreloading = () => {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen().catch(err => console.log("Fullscreen denied:", err));
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                }
+                setPhase('LOADING');
+                preloadImages();
+            };
+
+            const preloadImages = () => {
+                let loaded = 0;
+                const totalImages = CARD_POOL.length + 1;
+                const checkDone = () => {
+                    loaded++;
+                    setLoadedCount(loaded);
+                    if (loaded >= totalImages) {
+                        setTimeout(() => {
+                            setPhase('CONSENT'); 
+                        }, 500);
+                    }
+                };
+                
+                const chestImg = new Image(); chestImg.src = CHEST_IMAGE_URL; chestImg.onload = checkDone; chestImg.onerror = checkDone;
+                CARD_POOL.forEach(card => {
+                    const img = new Image(); img.src = card.imgSrc; img.onload = checkDone; img.onerror = checkDone;
+                });
+            };
+
+            const handleConsentAgree = () => {
+                setConsentAgreedTime(getBeijingTime()); 
+                setPhase('GUIDE'); 
+            };
+
+            const handleConsentDisagree = () => {
+                alert("You have chosen not to participate. The experiment will now terminate; you may safely close this browser window.");
+                setPhase('END');
+            };
+
+           const handleGuideNext = () => {
+                if (!subjectID.trim()) {
+                alert("Please enter your phone number to proceed."); 
+                return;
+            }
+            setPhase('READY');
+};
+
+            const startFormalExperiment = () => {
+                experimentStartTimeRef.current = Date.now();
+                setDataLog([]);
+                setCurrentTrial(1);
+                startTrial(1);
+            };
+
+            const startTrial = (trialIndex) => {
+                const sequenceIndex = (trialIndex - 1) % FIXED_SEQUENCE_INDICES.length;
+                const cardPoolIndex = FIXED_SEQUENCE_INDICES[sequenceIndex];
+                setCurrentCard(CARD_POOL[cardPoolIndex]);
+                setConfidenceScore(50);
+                setBidAmount(0);
+                currentOnsetsRef.current = { fixation: 0, chest: 0, confidence: 0, bidding: 0, opening: null, result: null };
+                setPhase('FIXATION');
+            };
+
+            useEffect(() => {
+                const now = Date.now();
+                const relativeTime = now - experimentStartTimeRef.current;
+
+                if (phase === 'FIXATION') {
+                    currentOnsetsRef.current.fixation = relativeTime;
+                    timerRef.current = setTimeout(() => { setPhase('CHEST_DISPLAY'); }, CONFIG.fixationDuration);
+                } 
+                else if (phase === 'CHEST_DISPLAY') {
+                    currentOnsetsRef.current.chest = relativeTime;
+                } 
+                else if (phase === 'CONFIDENCE') {
+                    currentOnsetsRef.current.confidence = relativeTime;
+                    phaseStartTimeRef.current = now;
+                } 
+                else if (phase === 'BIDDING') {
+                    currentOnsetsRef.current.bidding = relativeTime;
+                    phaseStartTimeRef.current = now;
+                } 
+                else if (phase === 'OPENING') {
+                    currentOnsetsRef.current.opening = relativeTime;
+                } 
+                else if (phase === 'RESULT') {
+                    currentOnsetsRef.current.result = relativeTime;
+                }
+
+                return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+            }, [phase]);
+
+            const handleChestViewed = () => {
+                playSound('click');
+                setPhase('CONFIDENCE');
+            };
+
+            const _handleConfidenceSubmitProxy = () => {
+                tempConfidenceRTRef.current = Date.now() - phaseStartTimeRef.current;
+                playSound('click');
+                setPhase('BIDDING');
+            };
+
+            const handleBidSubmit = () => {
+                const bidRT = Date.now() - phaseStartTimeRef.current;
+                playSound('click');
+                const isPurchased = bidAmount >= CONFIG.buyThreshold;
+                
+                if (!isPurchased) {
+                    finalizeTrial(bidRT, false, 0, false);
+                } else {
+                    setPhase('OPENING');
+                    setTimeout(() => {
+                        const isWin = Math.random() < currentCard.prob;
+                        const reward = isWin ? currentCard.value : 0;
+                        setLastResult({ win: isWin, reward: reward });
+                        finalizeTrial(bidRT, isWin, reward, true);
+                    }, 2000); 
+                }
+            };
+
+            const finalizeTrial = (bidRT, isWin, reward, didPurchase) => {
+                const currentData = {
+                    subjectID: subjectID,
+                    trialIndex: currentTrial,
+                    cardName: currentCard.name,
+                    rarity: currentCard.rarity,
+                    probability: currentCard.prob,
+                    confidence: confidenceScore,
+                    confidenceRT: tempConfidenceRTRef.current,
+                    bid: bidAmount,
+                    bidRT: bidRT,
+                    didPurchase: didPurchase,
+                    isWin: didPurchase ? isWin : null,
+                    timestamp: getBeijingTime(), 
+                    fixationOnset: currentOnsetsRef.current.fixation,
+                    chestDisplayOnset: currentOnsetsRef.current.chest,
+                    confidenceOnset: currentOnsetsRef.current.confidence,
+                    biddingOnset: currentOnsetsRef.current.bidding,
+                    openingOnset: currentOnsetsRef.current.opening,
+                    resultOnset: currentOnsetsRef.current.result,
+                    consentTime: consentAgreedTime 
+                };
+
+                setDataLog(prev => [...prev, currentData]);
+
+                if (didPurchase) {
+                    setPhase('RESULT');
+                } else {
+                    checkNext();
+                }
+            };
+
+            const checkNext = () => {
+                const nextTrialIndex = currentTrial + 1;
+                if (nextTrialIndex > CONFIG.totalTrials) {
+                    setPhase('END');
+                } else {
+                    setCurrentTrial(nextTrialIndex); 
+                    startTrial(nextTrialIndex); 
+                }
+            };
+
+            const downloadCSV = () => {
+                const headers = [
+                    'Phone_Number', 'Trial', 'Card_Name', 'Rarity', 'Win_Prob', 
+                    'Confidence_Val', 'Confidence_RT', 
+                    'Bid_Amount', 'Bid_RT', 
+                    'Purchased', 'Outcome_Win', 
+                    'Fixation_Onset', 'Chest_Display_Onset', 'Confidence_Onset', 'Bidding_Onset', 'Opening_Onset', 'Result_Onset', 
+                    'Timestamp (CST)', 'Consent_Agreed_Time'
+                ];
+                const rows = dataLog.map(d => [
+                    d.subjectID, d.trialIndex, d.cardName, d.rarity, d.probability, 
+                    d.confidence, d.confidenceRT, 
+                    d.bid, d.bidRT, 
+                    d.didPurchase ? 1 : 0, d.isWin === null ? 'NA' : (d.isWin ? 1 : 0), 
+                    d.fixationOnset, d.chestDisplayOnset, d.confidenceOnset, d.biddingOnset, d.openingOnset, d.resultOnset,
+                    d.timestamp, d.consentTime
+                ]);
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `LootBox_Data_${subjectID}_${new Date().getTime()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const handleImageError = (e) => {
+                e.currentTarget.onerror = null; 
+                e.currentTarget.src = "https://placehold.co/400x400/fee2e2/991b1b?text=Img+Err";
+                e.currentTarget.classList.remove('silhouette-force'); 
+            };
+
+            const renderInfoHeader = (showSilhouette) => (
+                <div className="absolute top-0 left-0 w-full flex justify-between items-start px-12 py-6 z-40 pointer-events-none">
+                    <div className="flex flex-col items-center bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-gray-100 shadow-sm min-w-[120px]">
+                        <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Win Prob</span>
+                        <span className={`text-4xl font-black ${currentCard.color}`}>{(currentCard.prob * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className={`flex flex-col items-center transition-opacity duration-500 ${showSilhouette ? 'opacity-100' : 'opacity-0'}`}>
+                        <div className="relative w-24 h-24">
+                            <img src={currentCard.imgSrc} alt="Silhouette" className="w-full h-full object-contain drop-shadow-lg silhouette-force" onError={(e) => e.currentTarget.style.display = 'none'} />
+                            <div className="absolute -bottom-6 w-full text-center text-gray-300 font-bold text-sm tracking-widest">???</div>
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-center bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-gray-100 shadow-sm min-w-[120px]">
+                        <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Rarity</span>
+                        <span className={`text-5xl font-black ${currentCard.color}`}>{currentCard.rarity}</span>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="flex-1 relative w-full h-screen flex flex-col">
+                    <div className="w-full bg-white border-b border-gray-200 p-4 flex justify-between items-center z-50">
+                        <span className="font-bold text-gray-800">LootBox Lab <span className="text-xs text-gray-500 ml-1">v23.0 Final+ID</span></span>
+                        <div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded">Trial: {currentTrial} / {CONFIG.totalTrials}</div>
+                    </div>
+
+                    <div className="flex-1 relative w-full h-full overflow-hidden">
+                        {/* START */}
+                        {phase === 'START' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-8 animate-fade-in">
+                                <h1 className="text-6xl font-black text-gray-900 tracking-tight">Loot Box Purchase Experiment</h1>
+                                <p className="text-gray-500 text-xl">Full-screen Immersive Mode · Local Data Loading · High-precision Timing</p>
+                                <button onClick={startPreloading} className="px-12 py-5 bg-gray-900 text-white rounded-full font-bold text-2xl hover:scale-105 transition-transform flex items-center gap-3 shadow-2xl cursor-pointer">
+                                    <Maximize className="text-white" /> Full-screen & Preload Assets
+                                </button>
+                            </div>
+                        )}
+
+                        {/* LOADING */}
+                        {phase === 'LOADING' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-6">
+                                <Loader2 size={64} className="text-blue-600 animate-spin" />
+                                <p className="text-2xl font-bold text-gray-600">Preloading local assets...</p>
+                                <p className="text-gray-400">Loaded {loadedCount} / {CARD_POOL.length + 1}</p>
+                            </div>
+                        )}
+
+                        {/* CONSENT: Informed Consent Form */}
+                        {phase === 'CONSENT' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-6 animate-fade-in bg-white max-w-4xl mx-auto px-8">
+                                <h1 className="text-4xl font-black text-gray-900 mb-2 flex items-center gap-3"><FileText size={36}/> Informed Consent Form</h1>
+                                <div className="w-full text-sm text-blue-600 bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 flex items-center justify-center gap-2 mb-2">
+            <span>ℹ️</span>
+            <span><strong>Tip:</strong> During the experiment, if the content is not fully visible, please press <strong>Ctrl + Scroll Down</strong> to zoom out for a better view.</span>
+        </div>
+                                <div className="w-full h-[500px] overflow-y-auto bg-gray-50 p-8 rounded-2xl border border-gray-200 text-gray-700 leading-relaxed text-lg shadow-inner">
+                                    <h3 className="font-bold text-xl mb-2">1. Purpose of the Study</h3>
+                                    <p className="mb-4">This study aims to investigate individual value assessment and decision-making intuition under conditions of incomplete visual information.</p>
+                                    <h3 className="font-bold text-xl mb-2">2. Procedures</h3>
+                                    <p className="mb-4">You will play the role of a Mystery Creature Trainer, facing a series of Mystery Capsules containing Mystery Creature of different rarities. You are required to assess your confidence and decide whether to bid based on provided probability information and visual cues (silhouettes). Please make decisions based on your personal gaming habits and intuition to maximize your earnings in the game.</p>
+                                    <h3 className="font-bold text-xl mb-2">3. Risks and Benefits</h3>
+                                    <p className="mb-4">This experiment has no adverse effects on physical or mental health. Your participation will help us better understand human decision-making behavior. In return, you will be compensated based on your decision outcomes (refer to the instructions for details).</p>
+                                    <h3 className="font-bold text-xl mb-2">4. Anonymity and Confidentiality</h3>
+                                    <p className="mb-4">All your data will be kept strictly confidential and used for academic research only. Data will be stored anonymously and will not contain any of your personal identification information.</p>
+                                    <h3 className="font-bold text-xl mb-2">5. Voluntary Participation</h3>
+                                    <p className="mb-4">Your participation is entirely voluntary. You may choose to withdraw at any time during the experiment, though this may render your data invalid.</p>
+                                    <hr className="my-6 border-gray-300"/>
+                                    <p className="font-bold text-gray-900">If you have read and understood the above information and agree to participate in this study, please click the "I Agree" button below.</p>
+                                </div>
+                                <div className="flex gap-6 w-full justify-center">
+                                    <button onClick={handleConsentDisagree} className="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-bold text-xl transition-colors cursor-pointer">
+                                        Disagree (Exit)
+                                    </button>
+                                    <button onClick={handleConsentAgree} className="px-12 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xl shadow-xl transition-transform hover:scale-105 cursor-pointer">
+                                        I Agree, Proceed to Experiment
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* GUIDE: Experimental Instructions */}
+                        {phase === 'GUIDE' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-8 animate-fade-in bg-white max-w-5xl mx-auto px-12">
+                                <h1 className="text-5xl font-black text-gray-800 mb-4">Experimental Instructions</h1>
+                                <div className="space-y-6 text-lg text-gray-600 leading-relaxed bg-gray-50 p-8 rounded-3xl border border-gray-100 shadow-sm w-full">
+                                    <p>Welcome to the experiment！</p>
+                                    <p>In this task, you will play the role of a<span className="font-bold text-blue-600"> Mystery Creature Trainer</span>.You will be presented with a series of mysterious Mystery Capsules.</p>
+                                    <p>Each Mystery Capsule contains a Mystery Creature of varying rarity. You need to decide whether to purchase each Mystery Capsule based on the provided<span className="font-bold text-gray-800"> Mystery Creature silhouettes</span> and<span className="font-bold text-gray-800"> winning probabilities.</span></p>
+ <div className="bg-red-50 p-4 rounded-xl border-l-4 border-red-500 text-red-700 font-bold shadow-sm">
+    Each purchase costs a fixed 10 coins, but you can increase your bid to express a higher desire for it. If you win, you will receive the Mystery Creature corresponding to the silhouette and a 50-coin reward; if you do not win, you will lose the 10 coins spent on that decision.
+</div>
+                                    <div className="bg-white p-6 rounded-xl border-l-4 border-amber-500 shadow-sm">
+                                        <h3 className="font-bold text-amber-700 mb-2 flex items-center gap-2"><Coins size={20}/> Compensation Rules</h3>
+                                        <p>5 RMB is designated as the base participation cost for this game.</p>
+                                        <p>To ensure realism, one of your purchase decisions will be randomly selected at the end of the experiment to determine your final bonus:</p>
+                                        <ul className="list-disc pl-6 mt-2 space-y-1">
+                                            <li>If you purchased and<span className="text-green-600 font-bold"> WON</span>：Compensation <span className="font-bold text-green-600">+4 RMB</span></li>
+                                            <li>If you purchased but<span className="text-red-500 font-bold"> LOST</span>：Compensation <span className="font-bold text-red-500">-1 RMB</span></li>
+                                            <li>If you chose<span className="text-gray-500 font-bold"> NOT TO PURCHASE</span>：Compensation remains unchanged.</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    {/* Number */}
+                                    <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 mt-4">
+                                        <label className="block text-gray-800 font-bold text-xl mb-3">Please enter your mobile number (for data matching):</label>
+                                        <input 
+                                        type="text" 
+                                        value={subjectID}
+                                        onChange={(e) => setSubjectID(e.target.value)}
+                                        placeholder="e.g.,13800138000" 
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-blue-300 focus:border-blue-600 focus:outline-none text-xl font-mono text-gray-800"
+/>
+                                    </div>
+                                </div>
+                                <button onClick={handleGuideNext} className="px-12 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold text-2xl shadow-xl transition-transform hover:scale-105 flex items-center gap-3 cursor-pointer">
+                                    Confirm Information & Proceed to Ready Phase <ArrowRight />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* READY */}
+                        {phase === 'READY' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-8 animate-fade-in bg-gray-50">
+                                <div className="p-8 bg-white rounded-full shadow-2xl mb-4">
+                                    <Timer size={80} className="text-green-600" />
+                                </div>
+                                <h1 className="text-5xl font-black text-gray-800">Ready to Begin</h1>
+                                <p className="text-xl text-gray-500 max-w-lg text-center">All assets have been successfully loaded. Clicking the button below will immediately start the experiment and record the initial timestamp.</p>
+                                <button onClick={startFormalExperiment} className="mt-8 px-16 py-6 bg-green-600 hover:bg-green-700 text-white rounded-full font-bold text-3xl shadow-2xl transition-transform hover:scale-105 flex items-center gap-4 cursor-pointer">
+                                    <Play size={32} fill="currentColor" /> Start Formal Experiment
+                                </button>
+                            </div>
+                        )}
+
+                        {/* FIXATION */}
+                        {phase === 'FIXATION' && (
+                            <div className="flex items-center justify-center w-full h-full bg-white absolute inset-0 z-50">
+                                <div className="text-8xl text-black font-light select-none">+</div>
+                            </div>
+                        )}
+
+                        {/* CHEST DISPLAY */}
+                        {phase === 'CHEST_DISPLAY' && (
+                            <div className="flex flex-col items-center justify-center h-full animate-fade-in relative z-10 max-w-6xl mx-auto pt-16">
+                                {renderInfoHeader(false)}
+                                <div className="flex items-center justify-center gap-20 mt-12 p-12 bg-gray-50 rounded-[3rem] border border-gray-100 shadow-2xl">
+                                    <div className="relative group transform hover:scale-105 transition-transform duration-500">
+                                        <img src={CHEST_IMAGE_URL} alt="Chest" className="w-64 h-64 object-contain drop-shadow-2xl relative z-10" />
+                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 ${currentCard.bg} opacity-40 blur-[60px] rounded-full`}></div>
+                                        <div className="text-center mt-6 font-black text-gray-300 text-xl tracking-[0.2em]">LOOT BOX</div>
+                                    </div>
+                                    <ArrowRight size={64} className="text-gray-200" />
+                                    <div className="relative group transform hover:scale-105 transition-transform duration-500">
+                                        <img src={currentCard.imgSrc} alt="Mystery" className="w-64 h-64 object-contain relative z-10 drop-shadow-xl silhouette-force" onError={handleImageError} />
+                                        <div className="text-center mt-6 font-black text-gray-800 text-xl tracking-[0.2em]">MYSTERY</div>
+                                    </div>
+                                </div>
+                                <button onClick={handleChestViewed} className="mt-12 px-16 py-5 bg-gray-900 hover:bg-gray-800 text-white rounded-full text-2xl font-bold shadow-2xl transition-all hover:-translate-y-1 cursor-pointer">
+                                    Continue
+                                </button>
+                            </div>
+                        )}
+
+                        {/* CONFIDENCE */}
+                        {phase === 'CONFIDENCE' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-12 max-w-3xl mx-auto relative pt-32">
+                                {renderInfoHeader(true)}
+                                <h2 className="text-4xl text-gray-900 font-bold mt-8">How confident are you in winning?</h2>
+                                <div className="w-full space-y-8 bg-gray-50 p-10 rounded-3xl border border-gray-200 shadow-lg">
+                                    <div className="flex justify-between text-gray-500 font-bold text-lg"><span>0%</span><span>100%</span></div>
+                                    <input type="range" min="0" max="100" value={confidenceScore} onChange={(e) => setConfidenceScore(Number(e.target.value))} className="w-full h-8 bg-gray-200 rounded-xl accent-blue-600 cursor-pointer"/>
+                                    <div className="text-center text-7xl font-mono font-black text-blue-600">{confidenceScore}%</div>
+                                </div>
+                                <button onClick={_handleConfidenceSubmitProxy} className="w-full px-8 py-5 bg-blue-600 text-white rounded-2xl font-bold text-2xl hover:bg-blue-700 transition-colors shadow-xl cursor-pointer">
+                                    Subjective Probability Judgment
+                                </button>
+                            </div>
+                        )}
+
+                        {/* BIDDING */}
+                        {phase === 'BIDDING' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-12 max-w-3xl mx-auto relative pt-32">
+                                {renderInfoHeader(true)}
+                                <h2 className="text-4xl text-gray-900 font-bold mt-8">What is the maximum amount you are willing to pay?</h2>
+                                <div className={`bg-gray-50 p-10 rounded-3xl border-2 ${bidAmount >= CONFIG.buyThreshold ? 'border-green-500 bg-green-50/30' : 'border-red-500 bg-red-50/30'} w-full shadow-lg transition-colors duration-300`}>
+                                    <div className="flex justify-center gap-3 mb-8 text-amber-700 bg-amber-100/50 py-3 rounded-xl text-lg font-bold border border-amber-200"><AlertCircle size={24}/> Purchase Threshold：{CONFIG.buyThreshold} RMB</div>
+                                    <input type="range" min="0" max="20" value={bidAmount} onChange={(e) => setBidAmount(Number(e.target.value))} className={`w-full h-8 rounded-xl cursor-pointer ${bidAmount >= CONFIG.buyThreshold ? 'accent-green-600' : 'accent-red-600'}`}/>
+                                    <div className={`text-center mt-6 text-8xl font-bold font-mono transition-colors ${bidAmount >= CONFIG.buyThreshold ? 'text-green-600' : 'text-red-600'}`}>
+                                        <span className="text-4xl mr-2">$</span>{bidAmount}
+                                    </div>
+                                    <div className="text-center mt-2 font-bold text-gray-400 uppercase tracking-widest">
+                                        {bidAmount >= CONFIG.buyThreshold ? 'Deal' : 'No Deal'}
+                                    </div>
+                                </div>
+                                <button onClick={handleBidSubmit} className={`w-full px-8 py-5 rounded-2xl font-bold text-2xl text-white transition-all shadow-xl cursor-pointer ${bidAmount >= CONFIG.buyThreshold ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                                    {bidAmount >= CONFIG.buyThreshold ? 'Confirm Purchase' : 'Confirm Skip'}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* OPENING */}
+                        {phase === 'OPENING' && (
+                            <div className="flex flex-col items-center justify-center h-full relative">
+                                <div className="animate-shake relative">
+                                    <img src={CHEST_IMAGE_URL} alt="Chest" className="w-80 h-80 object-contain drop-shadow-2xl" />
+                                    <Sparkles className="absolute -top-4 -right-4 text-amber-400 animate-pulse" size={64} />
+                                </div>
+                                <p className="mt-12 text-3xl font-black text-gray-300 tracking-[0.3em] animate-pulse">OPENING...</p>
+                            </div>
+                        )}
+
+                        {/* RESULT */}
+                        {phase === 'RESULT' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-8 relative">
+                                {lastResult?.win ? (
+                                    <div className="z-10 flex flex-col items-center animate-pop-out w-full">
+                                        <div className="flex items-center gap-4 mb-8">
+                                            <span className="text-5xl">🎉</span>
+                                            <div className="bg-amber-100 text-amber-600 px-8 py-3 rounded-full font-bold text-3xl flex items-center gap-3 border border-amber-200 shadow-sm">
+                                                <Coins size={32} className="fill-amber-600"/> Gain {lastResult.reward}$
+                                            </div>
+                                        </div>
+                                        <div className={`bg-white border-8 ${currentCard.border} rounded-[2rem] p-10 shadow-2xl flex flex-col items-center transform hover:scale-105 transition-transform duration-500`}>
+                                            <span className={`text-6xl font-black ${currentCard.color} mb-8`}>{currentCard.rarity}</span>
+                                            <img src={currentCard.imgSrc} alt="Reward" className="w-96 h-96 object-contain mb-8 drop-shadow-lg" onError={handleImageError} />
+                                            <span className="text-4xl font-black text-gray-800 tracking-wide">{currentCard.name}</span>
+                                        </div>
+                                        <button onClick={checkNext} className="mt-12 px-16 py-5 bg-green-600 hover:bg-green-700 text-white rounded-full text-2xl font-bold shadow-xl flex items-center gap-3 animate-bounce-in transition-transform hover:-translate-y-1 cursor-pointer">
+                                            Next Trial <ArrowRight size={28}/>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center animate-fade-in">
+                                        <div className="text-8xl mb-6">💨</div>
+                                        <h2 className="text-5xl font-black text-gray-300">Unfortunate...</h2>
+                                        <p className="text-gray-400 mt-4 text-2xl font-medium">No Mystery Creature found in this Mystery Capsule.</p>
+                                        <button onClick={checkNext} className="mt-16 px-16 py-5 bg-gray-500 hover:bg-gray-600 text-white rounded-full text-2xl font-bold shadow-xl flex items-center gap-3 transition-transform hover:-translate-y-1 cursor-pointer">
+                                            Next Trial <ArrowRight size={28} />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* END */}
+                        {phase === 'END' && (
+                            <div className="flex flex-col items-center justify-center h-full space-y-8 animate-fade-in">
+                                <h1 className="text-5xl font-black text-green-600">Experiment Completed</h1>
+                                <button onClick={downloadCSV} className="px-12 py-5 bg-green-600 text-white rounded-full font-bold text-2xl hover:bg-green-700 transition-colors flex items-center gap-3 shadow-xl cursor-pointer">
+                                    <Download size={28}/> Download Data (.csv)
+                                </button>
+                                <button onClick={() => setPhase('START')} className="text-gray-400 hover:text-gray-800 underline mt-4 cursor-pointer">Restart</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<LootBoxExperiment />);
+    </script>
+</body>
+</html>
